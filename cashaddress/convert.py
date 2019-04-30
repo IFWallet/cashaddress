@@ -20,10 +20,17 @@ class Address:
             ('P2PKH', 0, False),
             ('P2SH-TESTNET', 8, True),
             ('P2PKH-TESTNET', 0, True)
-        ]
+        ],
+        'slp': [
+            ('P2SH', 8, False),
+            ('P2PKH', 0, False),
+            ('P2SH-TESTNET', 8, True),
+            ('P2PKH-TESTNET', 0, True)
+        ],
     }
     MAINNET_PREFIX = 'bitcoincash'
     TESTNET_PREFIX = 'bchtest'
+    SLP_PREFIX = 'simpleledger'
 
     def __init__(self, version, payload, prefix=None):
         self.version = version
@@ -45,6 +52,14 @@ class Address:
 
     def cash_address(self):
         version_int = Address._address_type('cash', self.version)[1]
+        payload = [version_int] + self.payload
+        payload = convertbits(payload, 8, 5)
+        checksum = calculate_checksum(self.prefix, payload)
+        return self.prefix + ':' + b32encode(payload + checksum)
+
+    def slp_address(self):
+        self.prefix = self.SLP_PREFIX
+        version_int = Address._address_type('slp', self.version)[1]
         payload = [version_int] + self.payload
         payload = convertbits(payload, 8, 5)
         checksum = calculate_checksum(self.prefix, payload)
@@ -95,7 +110,8 @@ class Address:
     @staticmethod
     def _cash_string(address_string):
         if address_string.upper() != address_string and address_string.lower() != address_string:
-            raise InvalidAddress('Cash address contains uppercase and lowercase characters')
+            raise InvalidAddress(
+                'Cash address contains uppercase and lowercase characters')
         address_string = address_string.lower()
         if ':' not in address_string:
             address_string = Address.MAINNET_PREFIX + ':' + address_string
@@ -113,6 +129,10 @@ class Address:
 
 def to_cash_address(address):
     return Address.from_string(address).cash_address()
+
+
+def to_slp_address(address):
+    return Address.from_string(address).slp_address()
 
 
 def to_legacy_address(address):
