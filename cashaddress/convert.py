@@ -31,6 +31,7 @@ class Address:
     MAINNET_PREFIX = 'bitcoincash'
     TESTNET_PREFIX = 'bchtest'
     SLP_PREFIX = 'simpleledger'
+    SLP_TESTNET_PREFIX = 'slptest'
 
     def __init__(self, version, payload, prefix=None):
         self.version = version
@@ -51,6 +52,11 @@ class Address:
         return b58encode_check(Address.code_list_to_string([version_int] + self.payload))
 
     def cash_address(self):
+        if 'test' in self.prefix:
+            self.prefix = Address.TESTNET_PREFIX
+        else:
+            self.prefix = Address.MAINNET_PREFIX
+
         version_int = Address._address_type('cash', self.version)[1]
         payload = [version_int] + self.payload
         payload = convertbits(payload, 8, 5)
@@ -58,7 +64,10 @@ class Address:
         return self.prefix + ':' + b32encode(payload + checksum)
 
     def slp_address(self):
-        self.prefix = self.SLP_PREFIX
+        if 'test' in self.prefix:
+            self.prefix = Address.SLP_TESTNET_PREFIX
+        else:
+            self.prefix = Address.SLP_PREFIX
         version_int = Address._address_type('slp', self.version)[1]
         payload = [version_int] + self.payload
         payload = convertbits(payload, 8, 5)
@@ -92,6 +101,8 @@ class Address:
             raise InvalidAddress('Expected string as input')
         if ':' not in address_string:
             return Address._legacy_string(address_string)
+        elif address_string.startswith(Address.SLP_PREFIX) or address_string.startswith(Address.SLP_TESTNET_PREFIX):
+            return Address._slp_string(address_string)
         else:
             return Address._cash_string(address_string)
 
@@ -122,6 +133,25 @@ class Address:
         converted = convertbits(decoded, 5, 8)
         version = Address._address_type('cash', converted[0])[0]
         if prefix == Address.TESTNET_PREFIX:
+            version += '-TESTNET'
+        payload = converted[1:-6]
+        return Address(version, payload, prefix)
+
+    @staticmethod
+    def _slp_string(address_string):
+        if address_string.upper() != address_string and address_string.lower() != address_string:
+            raise InvalidAddress(
+                'Cash address contains uppercase and lowercase characters')
+        address_string = address_string.lower()
+        if ':' not in address_string:
+            address_string = Address.SLP_PREFIX + ':' + address_string
+        prefix, base32string = address_string.split(':')
+        decoded = b32decode(base32string)
+        if not verify_checksum(prefix, decoded):
+            raise InvalidAddress('Bad cash address checksum')
+        converted = convertbits(decoded, 5, 8)
+        version = Address._address_type('slp', converted[0])[0]
+        if prefix == Address.SLP_TESTNET_PREFIX:
             version += '-TESTNET'
         payload = converted[1:-6]
         return Address(version, payload, prefix)
